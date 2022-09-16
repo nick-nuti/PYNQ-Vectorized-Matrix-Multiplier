@@ -3,6 +3,7 @@ Pynq Z1 Matrix Multiplier created using VITIS HLS
 Why is this important?:
  - Typically only small matrices can be processed on PL due to small BRAM sizes... so with this project you're limited by how much DRAM is available. With decent sizes    of DRAM (even 512 MB), you can do matrix multiplications on very large matrices.
  - This implementation is fast enough and has many places where it can be improved (speed currently: ~1 second to process [100,100] matrix * [100,100] matrix); this      was a proof of concept
+ - Notice, this deign is very slow for 1024*1024 matrix multiplication
 
 Useful implementation information:
  - numpy arrays can be easily inputted to this by using the ".flatten()" function
