@@ -1,60 +1,42 @@
-Pynq Z1 Matrix Multiplier created using VITIS HLS
-
-***NOTICE*** this is a proof of concept... and this design needs optimization
+Vectorized Matrix Multiplier Vitis HLS IP (Half-Precision Fixed-Point)
 
 Why is this important?:
- - Typically only small matrices can be processed on PL due to small BRAM sizes... so with this project you're limited by how much DRAM is available. With decent sizes    of DRAM (even 512 MB), you can do matrix multiplications on very large matrices.
- - This implementation is fast enough and has many places where it can be improved (speed currently: ~1 second to process [100,100] matrix * [100,100] matrix); this      was a proof of concept
- - Notice, this deign is very slow for 1024*1024 matrix multiplication
+ - Typically only small matrices can be processed on PL due to small BRAM sizes... so with this project you're limited by how much DRAM is available. With decent sizes of DRAM (even 512 MB), you can do matrix multiplications on very large matrices.
+ - This design is as fast as numpy (if not faster), is small enough to fit on a lot of FPGA devices, uses a low amount of power, and can be used in a lot of ways.
+ - IP can run in parallel with several of the same IP to generate results for matrix multiplication of very large matrices in a short time
+ - IP is system-agnostic just needs Master AXI controls & data connections, and Slave AXI Lite controls & data connections.
 
-Useful implementation information:
- - numpy arrays can be easily inputted to this by using the ".flatten()" function
- - numpy arrays can be easily derived from the output by using: 
-     mm_output_arr = np.array(output_arr)
-     numpy.reshape(mm_output_arr, (#rows, #columns))
+Results from Running the Matrix Multiplication IP on the PYNQ-Z1 and Kria KV260:
+![alt text](https://github.com/nick-nuti/Pynq-m_axi-matrix-multiplier/blob/main/results.PNG)
 
-Info:
- - Current max size is 1024 x 1024 for matrix A and matrix B (this can be increased; view "Notes" below)
- - Matrix A should be inputted normally
- - Matrix B must be transposed (the program naturally thinks Matrix B is transposed and takes it's value "row by row"
- - mat1r and mat1cmat2r: should be set to the row size and column size of matrix A (first matrix)
- - mat1cmat2r and mat2c: should be set to the row size and column size of matrix B (second matrix) [NOT TRANSPOSED VALUES; original values]
- 
-Notes:
-* - If you would like to increase the max size of the matrices then edit the following in "/Vitis/example.cpp":
-    - Right now, "depth" is set for 1024x1024 = 1048576
-    - Could change it to anything like 256x256 = 65536
-    - IMPORTANT: Increasing the size of "depth" doesn't increase the BRAM requirement in PL. Increasing the max depth allows the m_axi to access a portion of DDR memory     equivalent to "depth".
+Notice:
+- Resultant timing is from multiplying two of the same size matrices together [ex: 2000x2000 is specified in the picture, so matrix one (2000x2000) is multiplied by matrix two (2000x2000)]
+- IP on Kria KV260 was run at 300 MHz
+- IP on PYNQ-Z1 was run at 180 MHz
 
-    #pragma HLS INTERFACE m_axi port=matA depth=1048576 offset=slave bundle=matA
-    #pragma HLS INTERFACE s_axilite port=matA bundle=CTRL
+Validation Testbench:
+- Testbench runs the IP on each board with a Zynq processor and generates inputs and outputs using the PYNQ interface
+- Data is normalized in half-precision fixed-point format, sent to the IP, and is recieved and must be denormalized (example of this in the jupyter notebook)
+- PYNQ (jupyter notebook) is responsible for generating the matrices, sending the matrices to the IP, and comparing results against numpy
+- Vivado project connects the Zynq to the Vitis HLS IP
+- Vitis HLS IP completes the matrix multiplication and sends the results back
 
-    #pragma HLS INTERFACE m_axi port=matB depth=1048576 offset=slave bundle=matB
-    #pragma HLS INTERFACE s_axilite port=matB bundle=CTRL
+How to run this project?
+- let's say we're doing this for the KRIA KV260....
+- Open Vitis HLS 2022.1
+- Take the two github files from the "Vitis HLS" directory and import them to a Vitis HLS project specifically for part "xck26-sfvc784-2LV-c"
+- Solution -> Run C Synthesis, change period to "3.33", and press "ok"
+- Solution -> Export RTL
 
-    #pragma HLS INTERFACE m_axi port=matout depth=1048576 offset=slave bundle=matout
-    #pragma HLS INTERFACE s_axilite port=matout bundle=CTRL
-  
-* - once you change the "depth" you need to adjust the size of the following in "/Vitis/example.cpp": 
-    - IMPORTANT:
-    - buf1 should be adjusted to the max size of a row for matrix A (first matrix)
-    - buf1 should be adjusted to the max size of a column for matrix B (second matrix)
-    - buffout should be adjusted to the max size of a row for matrix out (output matrix)
-    - Note: modifying these arrays does change the BRAM requirement in PL.
-  float buf1[32768] = {0};
-	 float buf2[32768] = {0};
-	 float buffout[32768] = {0};
-  
-Multiplication:
-- The CPP is simple:
- 1. Loop
-   - 1A. burst read a row of matrix A
-   2. Loop
-     - 2A. burst read a row of transposed matrix B
-     - 2B. Loop
-       - 2B1. multiply values from row of matrix A with row of matrix B
-       - 2B2. store the values individually in an output buffer array
-     - 2C. finished multiplying, accumulate all values in an unrolled loop into a buffer
-     - 2D. burst write out buffer to DDR memory
+- Open Vivado 2022.1.2
+- Create new project for Kria KV260
+- Left pane -> Settings -> IP -> Repository -> "+" -> navigate to the Vitis HLS project directory and hit "ok"
+- Use the TCL Console, navigate to the TCL script inside of the github directory "Vivado/2022.1.2", and the block diagram will generate
+- Sources -> Design Sources -> Right-Click the block diagram design source -> "Create HDL Wrapper" -> "Let Vivado manage Wrapper and auto-update"
+- Generate Bitstream
+- When complete, go to project directory, search for .bit and .hwh files and copy them somewhere else, change names to matrixmult.hwh and matrixmult.bit for PYNQ
 
-- Note: after 2D you loop back to "2.Loop" until you've exhausted all transposed rows (aka columns) of matrix B. After all transposed rows of matrix B are processed for the row of matrix A, then go back to "1.Loop" and burst read the next row of matrix A... and do it all over again.
+- PYNQ
+- Copy the jupyter notebook file from github directory "PYNQ - Kriakv260/mm.ipynb" to FPGA jupyter notebook
+- Copy matrixmult.bit and matrixmult.hwh to FPGA jupyter notebook
+- Run
